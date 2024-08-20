@@ -4,10 +4,13 @@ use async_trait::async_trait;
 use log::{info, warn};
 use russh::{keys::PublicKeyBase64, server::{Config, Msg, Server as _, Session}, Channel, MethodSet};
 
+use crate::app::App;
+
 /// Server implements an SSH server interface to the App.
 /// It doesn't do much besides log information and log the address that is connectiong. 
-#[derive(Clone)]
-struct Server;
+struct Server {
+    app: Arc<dyn App>,
+}
 
 impl russh::server::Server for Server {
     type Handler = crate::server::Handler;
@@ -17,11 +20,13 @@ impl russh::server::Server for Server {
             Some(peer_addr) => info!("received connection from peer {peer_addr}"),
             None => warn!("recieved connection with no peer address")
         }
-        return Handler;
+        return Handler{ app: self.app.clone() };
     }
 }
 
-struct Handler;
+struct Handler {
+    app: Arc<dyn App>,
+}
 
 #[async_trait]
 impl russh::server::Handler for Handler {
@@ -47,7 +52,7 @@ impl russh::server::Handler for Handler {
 }
 
 /// Start an SSH server. 
-pub async fn server_init(private_key: russh::keys::key::KeyPair) {
+pub async fn server_init<T: App>(private_key: russh::keys::key::KeyPair, app: T) {
 
     let public_key_base64 = private_key.public_key_base64();
 
@@ -67,7 +72,7 @@ pub async fn server_init(private_key: russh::keys::key::KeyPair) {
     };
     let config = Arc::new(config);
 
-    let mut s = Server;
+    let mut s = Server{app: Arc::new(app)};
 
     s.run_on_address(config, ("127.0.0.1", 2222)).await.unwrap();
 }

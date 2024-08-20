@@ -1,11 +1,12 @@
-
-mod server;
-
 use std::fs;
 
+use app::SmoothWordings;
 use clap::Parser;
 use russh::keys::decode_secret_key;
 use tokio;
+
+mod server;
+mod app;
 
 /// An art project of smooth wordings
 #[derive(Parser)]
@@ -23,12 +24,14 @@ fn main() {
 
     let private_key = decode_secret_key(&key_contents, Option::None).expect("unable to parse private key");
 
+    let app = SmoothWordings;
+
     simple_logger::init_with_level(log::Level::Info).expect("unable to initialize logging");
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .expect("unable to start tokio")
         .block_on(async {
-            server::server_init(private_key).await;
+            server::server_init(private_key, app).await;
         });
 }
