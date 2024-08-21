@@ -2,7 +2,11 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use log::{info, warn};
-use russh::{keys::PublicKeyBase64, server::{Config, Msg, Server as _, Session}, Channel, MethodSet};
+use russh::{
+    keys::PublicKeyBase64,
+    server::{Config, Msg, Server as _, Session},
+    Channel, MethodSet,
+};
 use tokio::sync::Mutex;
 
 use crate::app::App;
@@ -14,20 +18,19 @@ pub struct AppServer {
 }
 
 impl AppServer {
-    /// Start an SSH server. 
+    /// Start an SSH server.
     pub fn new(private_key: russh::keys::key::KeyPair, app: impl App + Send + 'static) -> Self {
-
         let public_key_base64 = private_key.public_key_base64();
 
         info!("starting server with public key {public_key_base64}");
 
-        // Create a reasonable default configuration. 
+        // Create a reasonable default configuration.
         let config = Config {
             // Set an amusing server id
             //server_id: russh::SshId::Standard("ssh-smooth-wordings".to_owned()),
-            // Set an amusing banner. 
+            // Set an amusing banner.
             auth_banner: Some("All are welcome."),
-            // No authentication is required for our use case. 
+            // No authentication is required for our use case.
             methods: MethodSet::NONE,
             // TODO: load a key from a file
             keys: vec![private_key],
@@ -35,19 +38,18 @@ impl AppServer {
         };
         let config = Arc::new(config);
 
-        Self{
+        Self {
             config: config,
             app: Arc::new(Mutex::new(app)),
         }
-
     }
 
     pub async fn run(&mut self) {
-        self.run_on_address(self.config.clone(), ("127.0.0.1", 2222)).await.unwrap();
+        self.run_on_address(self.config.clone(), ("127.0.0.1", 2222))
+            .await
+            .unwrap();
     }
 }
-
-
 
 impl russh::server::Server for AppServer {
     type Handler = Self;
@@ -55,7 +57,7 @@ impl russh::server::Server for AppServer {
     fn new_client(&mut self, peer_addr: Option<std::net::SocketAddr>) -> Self {
         match peer_addr {
             Some(peer_addr) => info!("received connection from peer {peer_addr}"),
-            None => warn!("recieved connection with no peer address")
+            None => warn!("recieved connection with no peer address"),
         }
         return self.clone();
     }
@@ -65,10 +67,7 @@ impl russh::server::Server for AppServer {
 impl russh::server::Handler for AppServer {
     type Error = russh::Error;
 
-    async fn auth_none(
-        &mut self,
-        _: &str,
-    ) -> Result<russh::server::Auth, russh::Error> {
+    async fn auth_none(&mut self, _: &str) -> Result<russh::server::Auth, russh::Error> {
         Ok(russh::server::Auth::Accept)
     }
 
@@ -83,4 +82,3 @@ impl russh::server::Handler for AppServer {
         Ok(true)
     }
 }
-

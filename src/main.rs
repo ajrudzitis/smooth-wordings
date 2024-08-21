@@ -4,9 +4,9 @@ use clap::Parser;
 use russh::keys::decode_secret_key;
 use tokio;
 
-mod server;
 mod app;
 mod example;
+mod server;
 
 /// An art project of smooth wordings
 #[derive(Parser)]
@@ -22,7 +22,8 @@ fn main() {
 
     let key_contents = fs::read_to_string(args.key_file).expect("unable to read key file");
 
-    let private_key = decode_secret_key(&key_contents, Option::None).expect("unable to parse private key");
+    let private_key =
+        decode_secret_key(&key_contents, Option::None).expect("unable to parse private key");
 
     let app = example::TestApp;
 
