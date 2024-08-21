@@ -3,7 +3,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use log::{info, warn};
 use russh::{
-    keys::PublicKeyBase64, server::{Config, Msg, Server as _, Session}, Channel, ChannelId, MethodSet
+    keys::PublicKeyBase64,
+    server::{Config, Msg, Server as _, Session},
+    Channel, ChannelId, MethodSet,
 };
 use tokio::sync::Mutex;
 
@@ -13,6 +15,7 @@ use crate::app::App;
 pub struct AppServer {
     app: Arc<Mutex<dyn App + Send + 'static>>,
     config: Arc<Config>,
+    session_id: usize,
 }
 
 impl AppServer {
@@ -39,6 +42,7 @@ impl AppServer {
         Self {
             config: config,
             app: Arc::new(Mutex::new(app)),
+            session_id: 0,
         }
     }
 
@@ -65,7 +69,9 @@ impl russh::server::Server for AppServer {
             Some(peer_addr) => info!("received connection from peer {peer_addr}"),
             None => warn!("recieved connection with no peer address"),
         }
-        return self.clone();
+        let new_session = self.clone();
+        self.session_id += 1;
+        new_session
     }
 }
 
@@ -85,16 +91,19 @@ impl russh::server::Handler for AppServer {
         self.app
             .lock()
             .await
-            .new_instance(channel.id(), session.handle()).await;
+            .new_instance(self.session_id, channel.id(), session.handle())
+            .await;
         Ok(true)
     }
 
     async fn channel_close(
         &mut self,
-        channel: ChannelId,
+        _channel: ChannelId,
         _session: &mut Session,
     ) -> Result<(), russh::Error> {
-        self.app.lock().await.close_instance(channel).await;
+        self.app.lock().await.close_instance(self.session_id).await;
         Ok(())
     }
+
+    // TODO: also implement EOF handling
 }
