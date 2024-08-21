@@ -3,33 +3,66 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use log::{info, warn};
 use russh::{keys::PublicKeyBase64, server::{Config, Msg, Server as _, Session}, Channel, MethodSet};
+use tokio::sync::Mutex;
 
 use crate::app::App;
 
-/// Server implements an SSH server interface to the App.
-/// It doesn't do much besides log information and log the address that is connectiong. 
-struct Server {
-    app: Arc<dyn App>,
+#[derive(Clone)]
+pub struct AppServer {
+    app: Arc<Mutex<dyn App + Send + 'static>>,
+    config: Arc<Config>,
 }
 
-impl russh::server::Server for Server {
-    type Handler = crate::server::Handler;
+impl AppServer {
+    /// Start an SSH server. 
+    pub fn new(private_key: russh::keys::key::KeyPair, app: impl App + Send + 'static) -> Self {
 
-    fn new_client(&mut self, peer_addr: Option<std::net::SocketAddr>) -> Self::Handler {
+        let public_key_base64 = private_key.public_key_base64();
+
+        info!("starting server with public key {public_key_base64}");
+
+        // Create a reasonable default configuration. 
+        let config = Config {
+            // Set an amusing server id
+            //server_id: russh::SshId::Standard("ssh-smooth-wordings".to_owned()),
+            // Set an amusing banner. 
+            auth_banner: Some("All are welcome."),
+            // No authentication is required for our use case. 
+            methods: MethodSet::NONE,
+            // TODO: load a key from a file
+            keys: vec![private_key],
+            ..Default::default()
+        };
+        let config = Arc::new(config);
+
+        Self{
+            config: config,
+            app: Arc::new(Mutex::new(app)),
+        }
+
+    }
+
+    pub async fn run(&mut self) {
+        self.run_on_address(self.config.clone(), ("127.0.0.1", 2222)).await.unwrap();
+    }
+}
+
+
+
+impl russh::server::Server for AppServer {
+    type Handler = Self;
+
+    fn new_client(&mut self, peer_addr: Option<std::net::SocketAddr>) -> Self {
         match peer_addr {
             Some(peer_addr) => info!("received connection from peer {peer_addr}"),
             None => warn!("recieved connection with no peer address")
         }
-        return Handler{ app: self.app.clone() };
+        return self.clone();
     }
 }
 
-struct Handler {
-    app: Arc<dyn App>,
-}
-
 #[async_trait]
-impl russh::server::Handler for Handler {
+impl russh::server::Handler for AppServer {
     type Error = russh::Error;
 
     async fn auth_none(
@@ -51,28 +84,3 @@ impl russh::server::Handler for Handler {
     }
 }
 
-/// Start an SSH server. 
-pub async fn server_init<T: App>(private_key: russh::keys::key::KeyPair, app: T) {
-
-    let public_key_base64 = private_key.public_key_base64();
-
-    info!("starting server with public key {public_key_base64}");
-
-    // Create a reasonable default configuration. 
-    let config = Config {
-        // Set an amusing server id
-        //server_id: russh::SshId::Standard("ssh-smooth-wordings".to_owned()),
-        // Set an amusing banner. 
-        auth_banner: Some("All are welcome."),
-        // No authentication is required for our use case. 
-        methods: MethodSet::NONE,
-        // TODO: load a key from a file
-        keys: vec![private_key],
-        ..Default::default()
-    };
-    let config = Arc::new(config);
-
-    let mut s = Server{app: Arc::new(app)};
-
-    s.run_on_address(config, ("127.0.0.1", 2222)).await.unwrap();
-}
