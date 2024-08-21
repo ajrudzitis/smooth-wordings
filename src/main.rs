@@ -25,7 +25,7 @@ fn main() {
     let private_key =
         decode_secret_key(&key_contents, Option::None).expect("unable to parse private key");
 
-    let app = example::TestApp;
+    let app = example::TestApp::new();
 
     let mut app_server = server::AppServer::new(private_key, app);
 
