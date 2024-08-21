@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use russh::server::Session;
+use russh::{server::Handle, ChannelId};
 
 #[async_trait]
 pub trait App {
-    fn new_instance(&mut self, session: Session) -> Arc<dyn AppInstance>;
+    async fn new_instance(&mut self, channel_id: ChannelId, handle: Handle) -> Arc<dyn AppInstance>;
+    async fn close_instance(&mut self, channel_id: ChannelId);
     async fn update(&self);
 }
 

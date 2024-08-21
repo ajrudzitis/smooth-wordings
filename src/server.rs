@@ -3,9 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use log::{info, warn};
 use russh::{
-    keys::PublicKeyBase64,
-    server::{Config, Msg, Server as _, Session},
-    Channel, MethodSet,
+    keys::PublicKeyBase64, server::{Config, Msg, Server as _, Session}, Channel, ChannelId, MethodSet
 };
 use tokio::sync::Mutex;
 
@@ -45,6 +43,14 @@ impl AppServer {
     }
 
     pub async fn run(&mut self) {
+        let app = self.app.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                app.lock().await.update().await;
+            }
+        });
+
         self.run_on_address(self.config.clone(), ("127.0.0.1", 2222))
             .await
             .unwrap();
@@ -74,11 +80,21 @@ impl russh::server::Handler for AppServer {
     async fn channel_open_session(
         &mut self,
         channel: Channel<Msg>,
-        _session: &mut Session,
+        session: &mut Session,
     ) -> Result<bool, russh::Error> {
-        {
-            let _ = channel.data("hello".as_bytes()).await;
-        }
+        self.app
+            .lock()
+            .await
+            .new_instance(channel.id(), session.handle()).await;
         Ok(true)
+    }
+
+    async fn channel_close(
+        &mut self,
+        channel: ChannelId,
+        _session: &mut Session,
+    ) -> Result<(), russh::Error> {
+        self.app.lock().await.close_instance(channel).await;
+        Ok(())
     }
 }

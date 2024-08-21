@@ -29,7 +29,7 @@ fn main() {
 
     let mut app_server = server::AppServer::new(private_key, app);
 
-    simple_logger::init_with_level(log::Level::Info).expect("unable to initialize logging");
+    simple_logger::init_with_level(log::Level::Debug).expect("unable to initialize logging");
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
