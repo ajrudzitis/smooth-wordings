@@ -5,7 +5,7 @@ use log::{info, warn};
 use russh::{
     keys::PublicKeyBase64,
     server::{Config, Msg, Server as _, Session},
-    Channel, ChannelId, MethodSet,
+    Channel, MethodSet,
 };
 use tokio::sync::Mutex;
 
@@ -95,15 +95,4 @@ impl russh::server::Handler for AppServer {
             .await;
         Ok(true)
     }
-
-    async fn channel_close(
-        &mut self,
-        _channel: ChannelId,
-        _session: &mut Session,
-    ) -> Result<(), russh::Error> {
-        self.app.lock().await.close_instance(self.session_id).await;
-        Ok(())
-    }
-
-    // TODO: also implement EOF handling
 }

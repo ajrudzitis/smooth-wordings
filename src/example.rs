@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use log::debug;
-use russh::{server::Handle, ChannelId};
+use russh::{server::Handle, ChannelId, CryptoVec};
 use tokio::sync::Mutex;
 
 use crate::app::{App, AppInstance};
@@ -41,10 +41,19 @@ impl App for TestApp {
         instance
     }
 
-    async fn update(&self) {
+    async fn update(&mut self) {
         debug!("running update loop");
-        for (_channel, instance) in self.app_instances.lock().await.iter() {
-            instance.update();
+        let mut failed_instances: Vec<usize> = Vec::new();
+        {
+            for (session_id, instance) in self.app_instances.lock().await.iter() {
+                match instance.update() {
+                    Ok(()) => continue,
+                    Err(_) => failed_instances.push(*session_id),
+                };
+            }
+        }
+        for session_id in failed_instances.iter() {
+            self.close_instance(*session_id).await
         }
     }
 
@@ -61,13 +70,12 @@ struct TestAppInstance {
 impl AppInstance for TestAppInstance {}
 
 impl TestAppInstance {
-    fn update(&self) {
+    fn update(&self) -> Result<(), CryptoVec> {
         debug!("updating app instance!");
         futures::executor::block_on(async {
-            let _ = self
-                .handle
+            self.handle
                 .data(self.channel_id, String::from("data").into())
-                .await;
+                .await
         })
     }
 }

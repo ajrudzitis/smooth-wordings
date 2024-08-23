@@ -12,7 +12,7 @@ pub trait App {
         handle: Handle,
     ) -> Arc<dyn AppInstance>;
     async fn close_instance(&mut self, session_id: usize);
-    async fn update(&self);
+    async fn update(&mut self);
 }
 
 pub trait AppInstance {}
