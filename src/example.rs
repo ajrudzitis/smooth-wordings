@@ -2,10 +2,18 @@ use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use log::debug;
+use ratatui::{
+    prelude::CrosstermBackend,
+    widgets::{Block, Borders, Paragraph},
+    Terminal,
+};
 use russh::{server::Handle, ChannelId, CryptoVec};
 use tokio::sync::Mutex;
 
-use crate::app::{App, AppInstance};
+use crate::{
+    app::{App, AppInstance},
+    pty::Pty,
+};
 
 pub struct TestApp {
     app_instances: Arc<Mutex<HashMap<usize, Arc<TestAppInstance>>>>,
@@ -28,16 +36,21 @@ impl App for TestApp {
         session_id: usize,
         channel_id: ChannelId,
         handle: russh::server::Handle,
+        pty: Pty,
     ) -> std::sync::Arc<dyn crate::app::AppInstance> {
         self.open_sessions = self.open_sessions + 1;
+        let backend = CrosstermBackend::new(pty);
+        let terminal = Terminal::new(backend).expect("error creating terminal");
         let instance = Arc::new(TestAppInstance {
             channel_id: channel_id,
             handle: handle,
+            terminal: Mutex::new(terminal),
         });
         self.app_instances
             .lock()
             .await
             .insert(session_id, instance.clone());
+
         instance
     }
 
@@ -46,7 +59,7 @@ impl App for TestApp {
         let mut failed_instances: Vec<usize> = Vec::new();
         {
             for (session_id, instance) in self.app_instances.lock().await.iter() {
-                match instance.update() {
+                match instance.update().await {
                     Ok(()) => continue,
                     Err(_) => failed_instances.push(*session_id),
                 };
@@ -65,17 +78,24 @@ impl App for TestApp {
 struct TestAppInstance {
     channel_id: ChannelId,
     handle: Handle,
+    terminal: Mutex<Terminal<CrosstermBackend<Pty>>>,
 }
 
 impl AppInstance for TestAppInstance {}
 
 impl TestAppInstance {
-    fn update(&self) -> Result<(), CryptoVec> {
+    async fn update(&self) -> Result<(), CryptoVec> {
+        let mut terminal = self.terminal.lock().await;
         debug!("updating app instance!");
-        futures::executor::block_on(async {
-            self.handle
-                .data(self.channel_id, String::from("data").into())
-                .await
-        })
+        let _ = terminal.clear();
+        let _ = terminal.draw(|f| {
+            let paragraph = Paragraph::new(format!("Counter: {}", 1))
+                .alignment(ratatui::layout::Alignment::Center);
+            let block = Block::default()
+                .title("Press 'c' to reset the counter!")
+                .borders(Borders::ALL);
+            f.render_widget(paragraph.block(block), f.size());
+        });
+        Ok(())
     }
 }

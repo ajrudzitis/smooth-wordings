@@ -6,6 +6,7 @@ use tokio;
 
 mod app;
 mod example;
+mod pty;
 mod server;
 
 /// An art project of smooth wordings

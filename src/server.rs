@@ -9,7 +9,7 @@ use russh::{
 };
 use tokio::sync::Mutex;
 
-use crate::app::App;
+use crate::{app::App, pty::Pty};
 
 #[derive(Clone)]
 pub struct AppServer {
@@ -88,10 +88,11 @@ impl russh::server::Handler for AppServer {
         channel: Channel<Msg>,
         session: &mut Session,
     ) -> Result<bool, russh::Error> {
+        let pty = Pty::new(channel.id(), session.handle());
         self.app
             .lock()
             .await
-            .new_instance(self.session_id, channel.id(), session.handle())
+            .new_instance(self.session_id, channel.id(), session.handle(), pty)
             .await;
         Ok(true)
     }
