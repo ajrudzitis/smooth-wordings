@@ -6,6 +6,7 @@ use tokio;
 
 mod app;
 mod example;
+mod art;
 mod pty;
 mod server;
 
